@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<title>AllNutrax — Painel de Monitoramento</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #0b0d0a;
+    --panel: #12160f;
+    --line: #232b1d;
+    --lime: #C6F135;
+    --text: #eafcd6;
+    --muted: #7d9269;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    display: grid; grid-template-columns: 340px 1fr; height: 100vh;
+  }
+  header.top {
+    grid-column: 1 / -1; display:flex; align-items:center; justify-content:space-between;
+    padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header.top h1 { font-size: 16px; margin:0; letter-spacing:.5px; }
+  header.top h1 span { color: var(--lime); }
+  .stats { display:flex; gap: 24px; }
+  .stat { text-align:center; }
+  .stat b { display:block; font-size: 22px; color: var(--lime); }
+  .stat small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+
+  aside {
+    border-right: 1px solid var(--line); overflow-y:auto; background: var(--panel);
+  }
+  .visitor-item {
+    padding: 14px 18px; border-bottom: 1px solid var(--line); cursor:pointer;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .visitor-item:hover { background: #171d12; }
+  .visitor-item.active { background: #1a2314; border-left: 3px solid var(--lime); }
+  .v-info b { font-size: 13px; }
+  .v-info small { display:block; color: var(--muted); font-size: 11px; margin-top:2px; }
+  .badge {
+    background: var(--lime); color:#0b0d0a; font-size: 10px; font-weight:700;
+    border-radius: 20px; padding: 2px 7px; min-width: 16px; text-align:center;
+  }
+  .empty { padding: 30px; color: var(--muted); font-size: 13px; text-align:center; }
+
+  main { display:flex; flex-direction:column; }
+  #chatHeader { padding: 16px 24px; border-bottom: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+  #chatMessages { flex:1; padding: 24px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+  .msg { padding:10px 14px; border-radius:12px; max-width:60%; font-size:13px; line-height:1.5; }
+  .msg.visitor { align-self:flex-start; background:#1a2314; }
+  .msg.admin { align-self:flex-end; background: var(--lime); color:#0b0d0a; }
+  #chatInputRow { display:flex; border-top:1px solid var(--line); padding: 14px 24px; gap:10px; }
+  #chatInput {
+    flex:1; background:#151a10; border:1px solid var(--line); border-radius:10px;
+    padding: 10px 14px; color: var(--text); outline:none; font-size:13px;
+  }
+  #chatSend { background: var(--lime); border:none; border-radius:10px; padding: 0 20px; font-weight:700; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>All<span>Nutrax</span> · Painel de Monitoramento</h1>
+  <div class="stats">
+    <div class="stat"><b id="statOnline">0</b><small>Online agora</small></div>
+    <div class="stat"><b id="statTotal">0</b><small>Acessos totais</small></div>
+  </div>
+</header>
+
+<aside id="visitorList">
+  <div class="empty">Nenhum visitante online ainda.<br>Abra <b>/loja-demo.html</b> em outra aba pra testar.</div>
+</aside>
+
+<main>
+  <div id="chatHeader">Selecione um visitante na lista ao lado para conversar</div>
+  <div id="chatMessages"></div>
+  <div id="chatInputRow">
+    <input id="chatInput" placeholder="Digite sua resposta..." disabled />
+    <button id="chatSend" disabled>Enviar</button>
+  </div>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+  socket.emit("identify:admin");
+
+  let currentVisitorSocketId = null;
+  let currentVisitors = [];
+
+  const listEl = document.getElementById("visitorList");
+  const chatHeader = document.getElementById("chatHeader");
+  const chatMessages = document.getElementById("chatMessages");
+  const chatInput = document.getElementById("chatInput");
+  const chatSend = document.getElementById("chatSend");
+
+  function timeAgo(iso) {
+    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (diff < 60) return "agora mesmo";
+    if (diff < 3600) return Math.floor(diff / 60) + " min atrás";
+    return Math.floor(diff / 3600) + "h atrás";
+  }
+
+  function renderVisitors() {
+    if (currentVisitors.length === 0) {
+      listEl.innerHTML = '<div class="empty">Nenhum visitante online ainda.<br>Abra <b>/loja-demo.html</b> em outra aba pra testar.</div>';
+      return;
+    }
+    listEl.innerHTML = currentVisitors.map(v => `
+      <div class="visitor-item ${v.socketId === currentVisitorSocketId ? 'active' : ''}" data-id="${v.socketId}">
+        <div class="v-info">
+          <b>Visitante ${v.id} — ${v.ip}</b>
+          <small>Vendo: ${v.page} · entrou ${timeAgo(v.joinedAt)}</small>
+        </div>
+        ${v.unread > 0 ? `<span class="badge">${v.unread}</span>` : ""}
+      </div>
+    `).join("");
+
+    listEl.querySelectorAll(".visitor-item").forEach(el => {
+      el.addEventListener("click", () => openChat(el.dataset.id));
+    });
+  }
+
+  function openChat(socketId) {
+    currentVisitorSocketId = socketId;
+    const v = currentVisitors.find(x => x.socketId === socketId);
+    chatHeader.textContent = v ? `Conversando com Visitante ${v.id} (${v.ip}) — ${v.page}` : "Visitante";
+    chatInput.disabled = false;
+    chatSend.disabled = false;
+    chatMessages.innerHTML = "";
+    socket.emit("admin:getHistory", { socketId });
+    renderVisitors();
+  }
+
+  socket.on("stats:update", (data) => {
+    document.getElementById("statOnline").textContent = data.online;
+    document.getElementById("statTotal").textContent = data.totalAccesses;
+    currentVisitors = data.visitors;
+
+    // Se o visitante que eu tava conversando saiu do site, avisa
+    if (currentVisitorSocketId && !currentVisitors.find(v => v.socketId === currentVisitorSocketId)) {
+      chatHeader.textContent = "Esse visitante saiu do site.";
+      chatInput.disabled = true;
+      chatSend.disabled = true;
+    }
+    renderVisitors();
+  });
+
+  socket.on("chat:history", (data) => {
+    if (data.socketId !== currentVisitorSocketId) return;
+    chatMessages.innerHTML = "";
+    data.history.forEach(m => addMessageToUI(m.text, m.from));
+  });
+
+  socket.on("chat:incoming", (msg) => {
+    // mensagem nova de um visitante (pode não ser o que está aberto agora)
+    if (msg.socketId === currentVisitorSocketId) {
+      addMessageToUI(msg.text, msg.from);
+    }
+  });
+
+  function addMessageToUI(text, from) {
+    const div = document.createElement("div");
+    div.className = "msg " + from;
+    div.textContent = text;
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function sendReply() {
+    const text = chatInput.value.trim();
+    if (!text || !currentVisitorSocketId) return;
+    socket.emit("admin:message", { socketId: currentVisitorSocketId, text });
+    addMessageToUI(text, "admin");
+    chatInput.value = "";
+  }
+
+  chatSend.addEventListener("click", sendReply);
+  chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendReply(); });
+</script>
+</body>
+</html>

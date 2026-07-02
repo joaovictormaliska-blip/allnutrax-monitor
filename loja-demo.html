@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<title>AllNutrax — Loja (demo)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  body { font-family: system-ui, sans-serif; background:#0b0d0a; color:#eafcd6; margin:0; padding:40px; }
+  h1 { color:#C6F135; }
+  .card { background:#131810; border:1px solid #26311f; border-radius:14px; padding:20px; max-width:320px; margin-top:20px; }
+  small { color:#8fa77e; }
+</style>
+</head>
+<body>
+  <h1>AllNutrax 🏋️</h1>
+  <p>Essa é uma página de exemplo simulando a loja. Abra o painel admin em outra aba: <a style="color:#C6F135" href="/admin.html">/admin.html</a></p>
+  <div class="card">
+    <strong>Whey Protein Isolado 900g</strong>
+    <p>R$ 189,90</p>
+    <small>Simulação — sem carrinho real, só pra testar o widget de chat.</small>
+  </div>
+
+  <!-- Aqui está a mágica: essas duas linhas plugam o sistema de monitoramento/chat -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/widget.js"></script>
+</body>
+</html>
