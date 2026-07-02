@@ -1,0 +1,14 @@
+{
+  "name": "allnutrax-monitor",
+  "version": "1.0.0",
+  "description": "Sistema de monitoramento de acessos e chat ao vivo para AllNutrax",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
